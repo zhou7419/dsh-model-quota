@@ -171,5 +171,32 @@ const railTexts = collect(railDataTree, []).join(" | ");
 assert(railTexts.includes("¥47.49"), "rail pill shows DeepSeek balance");
 assert(countType(railDataTree, "svg") === 1, "rail pill shows a single logo");
 
+// Green check after a successful refresh (state index 2 = justRefreshed).
+useStateOverrides = { 0: true, 1: { ok: true, value: LIVE_VALUE }, 2: true, 4: { left: 20, top: 200 } };
+useStateCall = 0;
+const refreshedTree = QuotaPill(Object.assign({ wide: true }, injected));
+useStateOverrides = null;
+const refreshedTexts = collect(refreshedTree, []).join(" | ");
+assert(!refreshedTexts.includes("刷新中"), "no 刷新中 text");
+assert(countType(refreshedTree, "svg") >= 5, "green check icon appears after successful refresh");
+
+// Refresh button disabled during the 3s cooldown (state index 3 = cooling).
+const findButtons = (node, out) => {
+	if (Array.isArray(node)) return node.forEach((c) => findButtons(c, out));
+	if (node && typeof node === "object") {
+		if (node.type === "button") out.push(node);
+		if (Array.isArray(node.children)) node.children.forEach((c) => findButtons(c, out));
+	}
+	return out;
+};
+useStateOverrides = { 0: true, 1: { ok: true, value: LIVE_VALUE }, 3: true, 4: { left: 20, top: 200 } };
+useStateCall = 0;
+const coolingTree = QuotaPill(Object.assign({ wide: true }, injected));
+useStateOverrides = null;
+const buttons = findButtons(coolingTree, []);
+const refreshBtn = buttons.find((b) => b.props && b.props.disabled === true);
+assert(refreshBtn !== undefined, "refresh button disabled during cooldown");
+assert(countType(coolingTree, "svg") === 4, "no check icon while still cooling");
+
 console.log("ALL CLIENT-HALF CHECKS PASSED");
 process.exit(0);
