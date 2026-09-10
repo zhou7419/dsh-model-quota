@@ -59,7 +59,10 @@ const captureCtx = {
 	}
 };
 apply(captureCtx, {});
-assert(captured !== null && captured.services.includes("connection"), "register deferred until connection service");
+assert(
+	captured !== null && captured.services.includes("connection") && captured.services.includes("webServer"),
+	"register deferred until connection + webServer services"
+);
 
 // Simulate the connection inject firing with a fake connection handle
 let registered = null;
@@ -71,8 +74,8 @@ const connCtx = {
 };
 const fakeConnection = {
 	rpc: {
-		handle(channel, handler, options) {
-			registered = { channel, handler, options };
+		handle(...args) {
+			registered = { channel: args[0], handler: args[1], extraArgs: args.slice(2) };
 			return () => {};
 		}
 	}
@@ -90,6 +93,7 @@ const connectionInjectCtx = new Proxy(connCtx, {
 let fired = null;
 const firingCtx = {
 	connection: fakeConnection,
+	webServer: { register: () => () => {} },
 	get(name) {
 		return this[name];
 	},
@@ -101,7 +105,7 @@ const firingCtx = {
 apply(firingCtx, NO_CLI);
 assert(fired !== null, "connection inject fired");
 assert(registered !== null && registered.channel === "/rpc-quota", "channel /rpc-quota registered");
-assert(registered.options && registered.options.authority === "loopback", "loopback authority");
+assert(registered.extraArgs.length === 0, "handle() called without the retired authority option");
 
 // Call the handler
 const result = await registered.handler("get", {}, new AbortController().signal);
