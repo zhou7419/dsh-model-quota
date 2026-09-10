@@ -1,0 +1,12 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+- insert:
+    - id: model-quota
+      name: dsh-model-quota
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+        baseURL: https://api.deepseek.com
+        refreshIntervalMs: 30000
+        qianwenPersonal:
+          enabled: true
+          cookieCredential: QWEN_CONSOLE_COOKIE
+          secTokenCredential: QWEN_CONSOLE_SECTOKEN

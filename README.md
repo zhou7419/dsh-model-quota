@@ -13,7 +13,23 @@ DSH（DeepSeek Harness）Web 插件：在侧边栏底部显示模型剩余额度
 
 ## 安装
 
-### 方式一：一键脚本（推荐）
+### 方式一：dsh plugin（DSH 0.1.5-rc 及以上，推荐）
+
+DSH 0.1.5 起自带 pnpm，插件按标准包管理安装。本插件自带 `cordis.patch.yml`
+（通过 `dsh.bundle.patch` 声明），**装完自动插入额度条目，无需手工编辑 profile 配置**：
+
+```bash
+dsh plugin --profile web add github:zhou7419/dsh-model-quota
+# 或本地目录 / npm 源：
+dsh plugin --profile web add file:/path/to/dsh-model-quota
+dsh plugin --profile web add dsh-model-quota
+```
+
+装好后重启 `dsh web`，侧边栏底部出现额度徽标。
+
+> DSH 升级会重建 profile（清空手工复制的内容与用户的 patch 层），届时重新执行上面的命令即可。
+
+### 方式二：一键脚本（旧版 DSH / 无 pnpm）
 
 ```powershell
 git clone https://github.com/zhou7419/dsh-model-quota.git
@@ -22,29 +38,15 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 # 需要 qianwen CLI 备用通道时： install.ps1 -InstallQianwenCli
 ```
 
-脚本自动把插件复制到 `%DSH_HOME%\profiles\web\node_modules\dsh-model-quota`，
-并写入 `cordis.patch.yml` 入口（幂等，重复执行安全）。
+脚本优先调用 `dsh plugin add`，不可用时回退为手工复制 + 写入 profile 的
+`cordis.patch.yml` 入口（幂等，重复执行安全）。
 
-### 方式二：手动
+### 方式三：完全手动
 
-1. 把 `lib/`、`package.json`、`README.md` 复制到 `%DSH_HOME%\profiles\web\node_modules\dsh-model-quota\`
-   （依赖通过 DSH 自带安装闭包解析，无需 pnpm）
-2. `%DSH_HOME%\profiles\web\cordis.patch.yml` 追加：
-
-```yaml
-- insert:
-    - id: model-quota
-      name: dsh-model-quota
-      config:
-        apiKeyEnv: DEEPSEEK_API_KEY
-        baseURL: https://api.deepseek.com
-        refreshIntervalMs: 30000
-        qianwenPersonal:
-          enabled: true
-          cookieCredential: QWEN_CONSOLE_COOKIE
-          secTokenCredential: QWEN_CONSOLE_SECTOKEN
-```
-
+1. 把 `lib/`、`package.json`、`cordis.patch.yml` 复制到
+   `%DSH_HOME%\profiles\web\node_modules\dsh-model-quota\`
+2. 把插件的 `cordis.patch.yml` 内容（`- insert:` 条目）合并进
+   `%DSH_HOME%\profiles\web\cordis.patch.yml`
 3. 重启 `dsh web`，侧边栏底部（设置按钮旁）出现额度徽标
 
 ## 凭证配置
