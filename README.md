@@ -2,6 +2,10 @@
 
 DSH（DeepSeek Harness）Web 插件：在侧边栏底部显示模型剩余额度。
 
+> **兼容性**：要求 **DSH ≥ 0.1.5**。该版本起第三方端点在 `ctx.connection.fetch`
+> 上注册为精确 Fetch 路由（`/api/...`，位于 Connection 的鉴权围栏内），旧的
+> `rpc.handle(channel, handler, { authority })` 自定义通道 API 已废弃。
+
 ## 功能特性
 
 - **侧边栏底部额度徽标**（展开/收起自适应）：官方 logo + 余额/剩余额度，点击弹出明细
@@ -77,7 +81,8 @@ Token Plan 的 `sk-sp-` 密钥**只能用于交互式编程工具调用模型，
    - 浏览器登录千问AI平台 → 打开 [个人版管理页](https://platform.qianwenai.com/home/analytics/token-plan/individual)
    - F12 → Network（Fetch/XHR）→ 刷新 → 找到 URL 含 `BroadScopeAspnGateway` 的 `api.json` 请求
    - 复制请求头 `Cookie` 与表单 `sec_token`，存为上述凭证
-   - Cookie 有效期数天到数周，过期后重新抓取即可
+   - Cookie 有效期数天到数周；若弹层出现 `BailianGateway.Login.NotLogined`，
+     说明会话已过期——按上面步骤重新抓一次即可
 
 2. **qianwen CLI 通道（备用）**：
    ```bash

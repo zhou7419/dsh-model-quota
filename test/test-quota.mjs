@@ -31,98 +31,68 @@ console.log("Config(partial):", JSON.stringify(partial));
 // We exercise readPath/formatBalance through the fetch path instead; direct
 // access is not exported by design. The handler test covers the RPC contract.
 
-// 4) RPC contract with no credentials service present (CLI source off for determinism)
+// 4) Exact Fetch-route contract (CLI source off for determinism)
 const NO_CLI = { qianwenCli: { enabled: false, command: "qianwen" }, qianwenPersonal: { enabled: false } };
-let applied = false;
-const fakeCtxNoCreds = {
-	get(name) {
-		return void 0; // no credentials service mounted
-	},
-	inject(services, callback) {
-		console.log(`virtual ctx.inject(${services.join(",")}) — captured`);
-		return () => {};
-	}
-};
-apply(fakeCtxNoCreds, {});
-assert(true, "apply() runs without credentials service");
 
-// Direct handler test: build the handler by invoking apply with a captured inject
-let captured = null;
-const captureCtx = {
-	get(name) {
-		if (name === "credentials") return void 0;
-		return void 0;
-	},
-	inject(services, callback) {
-		captured = { services, callback };
-		return () => {};
-	}
-};
-apply(captureCtx, {});
-assert(
-	captured !== null && captured.services.includes("connection") && captured.services.includes("webServer"),
-	"register deferred until connection + webServer services"
-);
-
-// Simulate the connection inject firing with a fake connection handle
 let registered = null;
-const connCtx = {
-	get(name) {
-		if (name === "credentials") return void 0;
-		return void 0;
-	}
-};
-const fakeConnection = {
-	rpc: {
-		handle(...args) {
-			registered = { channel: args[0], handler: args[1], extraArgs: args.slice(2) };
-			return () => {};
+function makeCtx(options = {}) {
+	return {
+		get: () => void 0,
+		connection: {
+			requestRejection: () => options.rejection,
+			fetch: {
+				register(route) {
+					registered = route;
+					return () => {};
+				}
+			}
 		}
-	}
-};
-const connectionInjectCtx = new Proxy(connCtx, {
-	get(target, prop) {
-		if (prop === "connection") return fakeConnection;
-		return target.get(prop);
-	},
-	has(target, prop) {
-		return prop === "connection" || prop in target;
-	}
-});
-// Re-run apply with a ctx whose inject fires synchronously
-let fired = null;
-const firingCtx = {
-	connection: fakeConnection,
-	webServer: { register: () => () => {} },
-	get(name) {
-		return this[name];
-	},
-	inject(services, callback) {
-		fired = callback(this);
-		return () => {};
-	}
-};
-apply(firingCtx, NO_CLI);
-assert(fired !== null, "connection inject fired");
-assert(registered !== null && registered.channel === "/rpc-quota", "channel /rpc-quota registered");
-assert(registered.extraArgs.length === 0, "handle() called without the retired authority option");
+	};
+}
+function post(body) {
+	return new Request("http://127.0.0.1/api/model-quota", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: typeof body === "string" ? body : JSON.stringify(body)
+	});
+}
+async function callRoute(ctxConfig, envelope) {
+	apply(makeCtx(), ctxConfig);
+	const response = await registered.fetch(post(envelope));
+	return { response, payload: await response.json() };
+}
 
-// Call the handler
-const result = await registered.handler("get", {}, new AbortController().signal);
-console.log("RPC /rpc-quota get (no credentials):", JSON.stringify(result, null, 1));
+const first = await callRoute(NO_CLI, { type: "client-request", rpcId: "test-1", method: "get", payload: {} });
+assert(registered.path === "/api/model-quota", `route path is /api/model-quota (got ${registered.path})`);
+assert(Array.isArray(registered.methods) && registered.methods.includes("POST"), "route accepts POST");
+assert(registered.requestBody === "buffered", "route buffers its request body");
+assert(first.response.status === 200, "route answers 200");
+assert(first.payload.type === "server-response" && first.payload.rpcId === "test-1", "response envelope echoes the rpcId");
+const result = first.payload.result;
+console.log("route get (no credentials):", JSON.stringify(result, null, 1));
 assert(result.ok === true, "unconfigured credentials degrade to ok result");
 assert(result.value.deepseek && result.value.deepseek.configured === false, "deepseek reports unconfigured");
 assert(result.value.aliyunTokenPlan && result.value.aliyunTokenPlan.configured === false, "token plan reports unconfigured");
 assert(result.value.qianwen && result.value.qianwen.configured === false, "qianwen disabled reports unconfigured");
 assert(result.value.fetchedAt !== void 0, "fetchedAt present");
-assert(
-	result.value.qianwen && result.value.qianwen.error === void 0,
-	"personal console channel disabled does not leak errors"
-);
+assert(result.value.qianwen && result.value.qianwen.error === void 0, "personal console channel disabled does not leak errors");
 
 // Unknown endpoint
-const unknownResult = await registered.handler("nope", {}, new AbortController().signal);
-assert(unknownResult.ok === false && unknownResult.error.code === "unknown-endpoint", "unknown endpoint rejected");
+const unknown = await callRoute(NO_CLI, { type: "client-request", rpcId: "test-2", method: "nope", payload: {} });
+assert(unknown.payload.result.ok === false && unknown.payload.result.error.code === "unknown-endpoint", "unknown endpoint rejected");
+
+// Malformed body
+apply(makeCtx(), NO_CLI);
+const badResponse = await registered.fetch(post("not json"));
+assert(badResponse.status === 400, "malformed body is rejected with 400");
+assert((await badResponse.json()).result.ok === false, "malformed body degrades to an error result");
+
+// Trust/auth fence rejection is passed through
+const rejected = await (async () => {
+	apply(makeCtx({ rejection: 401 }), NO_CLI);
+	return registered.fetch(post({ type: "client-request", rpcId: "t", method: "get", payload: {} }));
+})();
+assert(rejected.status === 401, "rejection status is surfaced");
 
 // 5) Real DeepSeek balance fetch with the stored credential (network permitting)
 const credsPath = process.env.USERPROFILE ? process.env.USERPROFILE + "/.dsh/.credentials.yaml" : "";
@@ -130,36 +100,22 @@ if (credsPath && existsSync(credsPath)) {
 	const creds = readFileSync(credsPath, "utf8");
 	const m = /DEEPSEEK_API_KEY:\s*([A-Za-z0-9_\-\.]+)/.exec(creds);
 	if (m) {
-	const liveCtx = {
-		connection: fakeConnection,
-		get(name) {
-			if (name === "connection") return fakeConnection;
-			if (name === "credentials") {
-				return {
-					resolve: async (ref) => (ref === "DEEPSEEK_API_KEY" ? { value: m[1], source: "file" } : void 0)
-				};
-			}
-			return void 0;
-		},
-		inject(services, callback) {
-			return callback(this);
+		const liveCtx = makeCtx();
+		liveCtx.get = (name) =>
+			name === "credentials" ? { resolve: async (ref) => (ref === "DEEPSEEK_API_KEY" ? { value: m[1], source: "file" } : void 0) } : void 0;
+		apply(liveCtx, {});
+		const liveResponse = await registered.fetch(post({ type: "client-request", rpcId: "live", method: "get", payload: {} }));
+		const live = (await liveResponse.json()).result;
+		console.log("LIVE /user/balance:", JSON.stringify(live, null, 1));
+		if (live.ok && live.value.deepseek.configured) {
+			assert(typeof live.value.deepseek.totalBalance === "string", "live totalBalance formatted");
+		} else {
+			console.warn("live fetch unavailable (network sandbox?) deepseek:", JSON.stringify(live?.value?.deepseek));
 		}
-	};
-	apply(liveCtx, {});
-	const live = await registered.handler("get", {}, new AbortController().signal);
-	console.log("LIVE /user/balance:", JSON.stringify(live, null, 1));
-	if (live.ok && live.value.deepseek.configured) {
-		assert(typeof live.value.deepseek.totalBalance === "string", "live totalBalance formatted");
-	} else {
-		console.warn("live fetch unavailable (network sandbox?) deepseek:", JSON.stringify(live?.value?.deepseek));
-	}
-	// Live qianwen CLI probe (installed but not logged in → graceful hint; a
-	// sandboxed spawn failure also degrades to an error string).
-	const q = live.value && live.value.qianwen;
-	console.log("LIVE qianwen:", JSON.stringify(q));
-	assert(q && q.configured === true, "live qianwen reports configured attempt");
-	assert(typeof q.error === "string" || q.subscribed === false || q.subscribed === true, "qianwen degrades gracefully");
-	void liveCtx;
+		const q = live.value && live.value.qianwen;
+		console.log("LIVE qianwen:", JSON.stringify(q));
+		assert(q && q.configured === true, "live qianwen reports configured attempt");
+		assert(typeof q.error === "string" || q.subscribed === false || q.subscribed === true, "qianwen degrades gracefully");
 	} else {
 		console.warn("no DEEPSEEK_API_KEY found in credentials file — skipping live fetch");
 	}

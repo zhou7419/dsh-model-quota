@@ -69,18 +69,14 @@ const requireMock = (spec) => {
 const moduleExports = registration.factory(requireMock);
 assert(moduleExports && typeof moduleExports.apply === "function", "factory exports apply()");
 assert(
-	Array.isArray(moduleExports.inject) &&
-		moduleExports.inject.length === 2 &&
-		moduleExports.inject[0] === "connection" &&
-		moduleExports.inject[1] === "slots",
-	`exports.inject is [connection, slots] (got ${JSON.stringify(moduleExports.inject)})`
+	Array.isArray(moduleExports.inject) && moduleExports.inject.length === 1 && moduleExports.inject[0] === "slots",
+	`exports.inject is [slots] (got ${JSON.stringify(moduleExports.inject)})`
 );
 
 // 3) apply() registers into sidebar.footer.action (rich fake with register).
 let injectedKey = null;
 let registerCall = null;
 const richCtx = {
-	connection: { rpc: { call: async () => ({ ok: true, value: LIVE_VALUE }) } },
 	slots: {
 		inject(key, callback) {
 			injectedKey = key;
@@ -117,8 +113,8 @@ assert(wideTree && railTree && wideTree.type === "div", "component renders a roo
 console.log("component hooks executed:", hooksLog.join(", "));
 assert(hooksLog.includes("useState") && hooksLog.includes("useEffect"), "hooks executed");
 
-// Verify the inject share carries the rpc caller.
-assert(typeof injected.rpc.call === "function", "inject share provides rpc.call");
+// Verify the inject share carries the host caller.
+assert(typeof injected.call === "function", "inject share provides the host caller");
 assert(wideTree.props.style && wideTree.props.style.position === "relative", "root styles applied");
 
 // 6) Render the OPEN state with data (state overrides: open, record, pos).
