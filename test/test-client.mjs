@@ -155,6 +155,7 @@ assert(texts.includes("Qwen Token Plan · Credits"), "token plan section rendere
 assert(texts.includes("18.0K") && texts.includes("/ 25.0K"), "credits fraction rendered");
 assert(texts.includes("28%"), "used pct rendered");
 assert(texts.includes("订阅到期"), "subscription expiry row rendered");
+assert(texts.includes("额度重置"), "quota reset row rendered");
 assert(texts.includes("剩余天数") && texts.includes("18 天"), "remaining days row rendered");
 assert(texts.includes("每 60s 自动刷新"), "meta footer rendered");
 
