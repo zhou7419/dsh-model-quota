@@ -1,7 +1,7 @@
 {
   "name": "dsh-model-quota",
-  "description": "DSH web plugin: show remaining model quota in the sidebar footer — DeepSeek account balance and Qwen Token Plan credits.",
-  "version": "0.2.0",
+  "description": "DSH web plugin: show the DeepSeek account balance in the sidebar footer.",
+  "version": "0.3.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

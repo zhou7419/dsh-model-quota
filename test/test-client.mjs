@@ -100,9 +100,7 @@ assert(typeof QuotaPill === "function", "registered component is a function");
 // 5) Execute the component body with the stub React (wide + rail variants).
 const LIVE_VALUE = {
 	fetchedAt: "2026-09-01T00:00:00.000Z",
-	deepseek: { configured: true, available: true, currency: "CNY", totalBalance: "¥47.49", grantedBalance: "¥0.00", toppedUpBalance: "¥47.49" },
-	qianwen: { configured: true, subscribed: true, via: "console", planName: "Token Plan 个人版 (lite)", status: "valid", totalCredits: 25000, remainingCredits: 18000, usedPct: 28, resetDate: "2026-09-07T00:00:00.000Z", expiry: "2026-10-01T00:00:00.000Z", remainingDays: 18 },
-	aliyunTokenPlan: { configured: false }
+	deepseek: { configured: true, available: true, currency: "CNY", totalBalance: "¥47.49", grantedBalance: "¥0.00", toppedUpBalance: "¥47.49" }
 };
 const injected = registerCall.options.inject();
 useStateCall = 0;
@@ -148,15 +146,11 @@ useStateCall = 0;
 const openTree = QuotaPill(Object.assign({ wide: true }, injected));
 useStateOverrides = null;
 const texts = collect(openTree, []).join(" | ");
-assert(texts.includes("¥47.49") && texts.includes("18.0K"), "wide pill shows both balances");
-assert(countType(openTree, "svg") >= 4, "logos in pill and popover sections (>=4)");
+assert(texts.includes("¥47.49"), "wide pill shows the balance");
+assert(countType(openTree, "svg") === 2, "logos in pill and popover section (2)");
 assert(texts.includes("DeepSeek 余额"), "deepseek section title rendered");
-assert(texts.includes("Qwen Token Plan · Credits"), "token plan section rendered");
-assert(texts.includes("18.0K") && texts.includes("/ 25.0K"), "credits fraction rendered");
-assert(texts.includes("28%"), "used pct rendered");
-assert(texts.includes("订阅到期"), "subscription expiry row rendered");
-assert(texts.includes("额度重置"), "quota reset row rendered");
-assert(texts.includes("剩余天数") && texts.includes("18 天"), "remaining days row rendered");
+assert(texts.includes("可用") && texts.includes("赠金") && texts.includes("充值"), "balance rows rendered");
+assert(!texts.includes("Token Plan") && !texts.includes("Credits"), "qwen token plan section removed");
 assert(texts.includes("每 60s 自动刷新"), "meta footer rendered");
 
 // Rail variant with the same data.
@@ -175,7 +169,7 @@ const refreshedTree = QuotaPill(Object.assign({ wide: true }, injected));
 useStateOverrides = null;
 const refreshedTexts = collect(refreshedTree, []).join(" | ");
 assert(!refreshedTexts.includes("刷新中"), "no 刷新中 text");
-assert(countType(refreshedTree, "svg") >= 5, "green check icon appears after successful refresh");
+assert(countType(refreshedTree, "svg") === 3, "green check icon appears after successful refresh");
 
 // Refresh button disabled during the 3s cooldown (state index 3 = cooling).
 const findButtons = (node, out) => {
@@ -193,7 +187,7 @@ useStateOverrides = null;
 const buttons = findButtons(coolingTree, []);
 const refreshBtn = buttons.find((b) => b.props && b.props.disabled === true);
 assert(refreshBtn !== undefined, "refresh button disabled during cooldown");
-assert(countType(coolingTree, "svg") === 4, "no check icon while still cooling");
+assert(countType(coolingTree, "svg") === 2, "no check icon while still cooling");
 
 console.log("ALL CLIENT-HALF CHECKS PASSED");
 process.exit(0);

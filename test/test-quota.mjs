@@ -19,20 +19,18 @@ console.log("Config({}):", JSON.stringify(full));
 assert(full.apiKeyEnv === "DEEPSEEK_API_KEY", "default apiKeyEnv");
 assert(full.baseURL === "https://api.deepseek.com", "default baseURL");
 assert(full.refreshIntervalMs === 30000, "default refreshIntervalMs");
-assert(full.aliyunTokenPlan && full.aliyunTokenPlan.enabled === false, "aliyunTokenPlan defaults disabled");
-assert(full.qianwenCli && full.qianwenCli.enabled === true && full.qianwenCli.command === "qianwen", "qianwenCli enabled by default");
-assert(full.qianwenPersonal && full.qianwenPersonal.enabled === false && full.qianwenPersonal.commodityCode === "sfm_tokenplansolo_public_cn" && full.qianwenPersonal.baseUrl === "https://cs-data.qianwenai.com", "qianwenPersonal defaults disabled");
+assert(Object.keys(full).length === 4, `config exposes only the DeepSeek fields (got ${Object.keys(full).join(",")})`);
 
-const partial = await Config({ apiKeyEnv: "MY_KEY", aliyunTokenPlan: { enabled: true, endpoint: "https://x" } });
-assert(partial.apiKeyEnv === "MY_KEY" && partial.aliyunTokenPlan.cookie === "", "partial config merges defaults");
+const partial = await Config({ apiKeyEnv: "MY_KEY", baseURL: "https://example.test" });
+assert(partial.apiKeyEnv === "MY_KEY" && partial.baseURL === "https://example.test" && partial.requestTimeoutMs === 10000, "partial config merges defaults");
 console.log("Config(partial):", JSON.stringify(partial));
 
 // 3) private helpers (re-imported through the module internals via the channel)
-// We exercise readPath/formatBalance through the fetch path instead; direct
-// access is not exported by design. The handler test covers the RPC contract.
+// We exercise formatBalance through the fetch path instead; direct access is
+// not exported by design. The handler test covers the route contract.
 
-// 4) Exact Fetch-route contract (CLI source off for determinism)
-const NO_CLI = { qianwenCli: { enabled: false, command: "qianwen" }, qianwenPersonal: { enabled: false } };
+// 4) Exact Fetch-route contract
+const NO_CLI = {};
 
 let registered = null;
 function makeCtx(options = {}) {
@@ -72,10 +70,11 @@ const result = first.payload.result;
 console.log("route get (no credentials):", JSON.stringify(result, null, 1));
 assert(result.ok === true, "unconfigured credentials degrade to ok result");
 assert(result.value.deepseek && result.value.deepseek.configured === false, "deepseek reports unconfigured");
-assert(result.value.aliyunTokenPlan && result.value.aliyunTokenPlan.configured === false, "token plan reports unconfigured");
-assert(result.value.qianwen && result.value.qianwen.configured === false, "qianwen disabled reports unconfigured");
 assert(result.value.fetchedAt !== void 0, "fetchedAt present");
-assert(result.value.qianwen && result.value.qianwen.error === void 0, "personal console channel disabled does not leak errors");
+assert(
+	Object.keys(result.value).length === 2,
+	`snapshot carries only fetchedAt + deepseek (got ${Object.keys(result.value).join(",")})`
+);
 
 // Unknown endpoint
 const unknown = await callRoute(NO_CLI, { type: "client-request", rpcId: "test-2", method: "nope", payload: {} });
@@ -112,10 +111,6 @@ if (credsPath && existsSync(credsPath)) {
 		} else {
 			console.warn("live fetch unavailable (network sandbox?) deepseek:", JSON.stringify(live?.value?.deepseek));
 		}
-		const q = live.value && live.value.qianwen;
-		console.log("LIVE qianwen:", JSON.stringify(q));
-		assert(q && q.configured === true, "live qianwen reports configured attempt");
-		assert(typeof q.error === "string" || q.subscribed === false || q.subscribed === true, "qianwen degrades gracefully");
 	} else {
 		console.warn("no DEEPSEEK_API_KEY found in credentials file — skipping live fetch");
 	}
